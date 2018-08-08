@@ -145,6 +145,24 @@ function composeSourceMaps(tsMap, babelMap, tsFileName, tsContent, babelCode) {
   return map.toJSON()
 }
 
+// the typescript api needs some transformation of the JSON
+// this will also validate the config file and reports errors about it
+function convertCompilerOptionsFromJson(compilerOptionsJson) {
+  const { options, errors } = ts.convertCompilerOptionsFromJson(
+    compilerOptionsJson,
+    process.cwd()
+  )
+
+  if (errors.length) {
+    reportErrors(errors)
+  }
+
+  return Object.assign(options, {
+    sourceMap: true,
+    inlineSources: true,
+  })
+}
+
 const tsConfig = (() => {
   if (TSCONFIG_PATH) {
     const resolvedTsconfigPath = path.resolve(process.cwd(), TSCONFIG_PATH)
@@ -167,7 +185,9 @@ const tsConfig = (() => {
       return fs.existsSync(path.join(dir, expectedTsConfigFileName))
     })
   } catch (error) {
-    console.error(`${chalk.bold(`***ERROR***`)} in react-native-typescript-transformer
+    console.error(`${chalk.bold(
+      `***ERROR***`
+    )} in react-native-typescript-transformer
   
   ${chalk.red(`  Unable to find a "${expectedTsConfigFileName}" file.`)}
   
@@ -184,10 +204,7 @@ const tsConfig = (() => {
   return loadJsonFile(tsConfigPath)
 })()
 
-const compilerOptions = Object.assign(tsConfig.compilerOptions, {
-  sourceMap: true,
-  inlineSources: true,
-})
+const compilerOptions = convertCompilerOptionsFromJson(tsConfig.compilerOptions)
 
 module.exports.getCacheKey = function() {
   const upstreamCacheKey = upstreamTransformer.getCacheKey
