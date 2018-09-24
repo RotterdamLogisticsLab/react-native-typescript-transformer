@@ -9,6 +9,7 @@ const semver = require('semver')
 const traverse = require('babel-traverse')
 const crypto = require('crypto')
 const chalk = require('chalk')
+const glob = require('glob')
 
 const TSCONFIG_PATH = process.env.TSCONFIG_PATH
 
@@ -163,6 +164,29 @@ function convertCompilerOptionsFromJson(compilerOptionsJson) {
   })
 }
 
+function findDefinitionFilesForTypeRoots(typeRoots) {
+  // when the typeRoots option is not defined return empty array
+  if (typeRoots === undefined || !typeRoots.length) {
+    return []
+  }
+
+  // normalize typeroots
+  const roots = compilerOptions.typeRoots.map(root =>
+    path.normalize(`${root}/**/*.d.ts`)
+  )
+
+  // find all definition files in typeRoots
+  const definitionFiles = roots.map(root => glob.sync(root))
+
+  // flatten result
+  const flattenedDefinitionFiles = [].concat.apply([], definitionFiles)
+
+  // remove duplicates
+  const typeDefinitions = Array.from(new Set(flattenedDefinitionFiles))
+
+  return typeDefinitions
+}
+
 const tsConfig = (() => {
   if (TSCONFIG_PATH) {
     const resolvedTsconfigPath = path.resolve(process.cwd(), TSCONFIG_PATH)
@@ -225,7 +249,11 @@ module.exports.transform = function(src, filename, options) {
 
   if (filename.endsWith('.ts') || filename.endsWith('.tsx')) {
     if (compilerOptions.noEmitOnError) {
-      const program = ts.createProgram([filename], compilerOptions)
+      const definitions = findDefinitionFilesForTypeRoots(
+        compilerOptions.typeRoots
+      )
+      const filenames = definitions.concat(filename)
+      const program = ts.createProgram(filenames, compilerOptions)
 
       const preErrors = ts
         .getPreEmitDiagnostics(program)
